@@ -1,0 +1,100 @@
+
+---
+## 4. GATK v4.1.8.1: Variant Calling [Directory: 4_gatk]
+---
+#### 1. First, return to your personal directory (/pickett_shared/teaching/EPP622_Fall2022/analysis_test2/zsmith10), make a new directory for your `gatk` analyses, and change into it.
+```
+cd ../
+mkdir 4_gatk
+cd 4_gatk
+```
+#### 2. Next, symbolically link the Solenopsis invicta reference genome, bam files with read groups (.RG.bam files) and index bam files with read groups (.RG.bam.bai files) to the 4_gatk directory.
+```
+ln -s /pickett_shared/teaching/EPP622_Fall2022/raw_data/solenopsis_invicta/genome/UNIL_Sinv_3.0.fasta .
+ln -s ../3_bwa/*RG.bam* .
+```
+#### 3. Create a reference genome sequence dictionary (a .dict file) using `gatk` Note: `gatk` is natively installed on the server and is not loaded using `spack`.
+```
+/pickett_shared/software/gatk-4.2.6.1/gatk CreateSequenceDictionary -R UNIL_Sinv_3.0.fasta
+```
+#### 4. Index the reference genome .dict file using `samtools`, which create an indexed .fasta file with the .fasta.fai file type.
+```
+samtools faidx UNIL_Sinv_3.0.fasta
+```
+
+#### 5. Now, write a for loop to call SNPs and indels using the `gatk` HaplotypeCaller to compare variants. Files will be output in VCF and GVCF format. Standard VCF files only report detected variant calls, while GVCF files will allow us to recall SNPs/indels across samples by reporting all loci regardless of variants.
+```
+nano gatk_haplotypecaller.sh
+```
+```
+for f in *_sorted.RG.bam
+do
+        BASE=$( basename $f | sed 's/-trimmed_sorted.RG.bam*//g' )
+        echo "BASE $BASE"
+
+        /pickett_shared/software/gatk-4.2.6.1/gatk HaplotypeCaller \
+        -R UNIL_Sinv_3.0.fasta \
+        -I ${BASE}-trimmed_sorted.RG.bam \
+        -O ${BASE}.vcf
+
+        /pickett_shared/software/gatk-4.2.6.1/gatk HaplotypeCaller \
+        -R UNIL_Sinv_3.0.fasta \
+        -I $f \
+        -O ${BASE}.g.vcf \
+        -ERC GVCF \
+        -bamout ${BASE}_sorted.BG.realigned.bam
+done
+```
+
+#### 6. Exit the `nano` text file and run the script using `bash`.
+```
+bash gatk_haplotypecaller.sh
+```
+
+#### 7. Use `bcftools`'s stats tool to generate stats files for each sample using a for loop.
+```
+nano bcftools_stats.sh
+```
+```
+for f in *.vcf
+do
+        BASE=$( basename $f | sed 's/.vcf//g' )
+        echo "BASE $BASE"
+
+        bcftools stats $BASE.vcf > $BASE.vcf.stats.txt
+done
+
+rm *g.vcf.stats.txt
+```
+
+#### 8. Use grep to retrieve SNP counts from the `.stats` files.
+```
+grep 'number of SNPs:' SRR*vcf.stats.txt
+```
+SNPs Output:
+```
+SRR6922141.vcf.stats.txt:SN     0       number of SNPs: 27332
+SRR6922185.vcf.stats.txt:SN     0       number of SNPs: 19653
+SRR6922187.vcf.stats.txt:SN     0       number of SNPs: 25630
+SRR6922236.vcf.stats.txt:SN     0       number of SNPs: 18112
+```
+
+#### 9. Use grep to retrieve SNP counts from the `.stats` files.
+```
+grep 'number of indels:' SRR*vcf.stats.txt
+```
+Indels Output:
+```
+SRR6922141.vcf.stats.txt:SN     0       number of indels:       3838
+SRR6922185.vcf.stats.txt:SN     0       number of indels:       3159
+SRR6922187.vcf.stats.txt:SN     0       number of indels:       3466
+SRR6922236.vcf.stats.txt:SN     0       number of indels:       2955
+```
+
+#### 10. Copy the reference genome, reference genome index, all RG.bam and RG.bam.bai files, and all .vcf files to your computer using your local terminal.
+```
+scp 'zsmith10@sphinx.ag.utk.edu:/pickett_shared/teaching/EPP622_Fall2022/analysis_test2/zsmith10/4_gatk/SRR*' .
+scp 'zsmith10@sphinx.ag.utk.edu:/pickett_shared/teaching/EPP622_Fall2022/analysis_test2/zsmith10/4_gatk/UNIL*' .
+```
+
+#### 11. View these files on IGV (igv.org). IGV allows you to visualize whether SNPs in the VCF files are supported, as well as visualize multiple read alignments.
